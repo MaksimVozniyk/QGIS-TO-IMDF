@@ -233,7 +233,7 @@ def create_amenity(feature, unit, exporting_handler):
         return amenity
 
 
-def prepare_layer_for_processing(layer):
+def prepare_layer_for_processing(layer, layer_level_input):
     layer = processing.run("native:multiparttosingleparts",
                            {'INPUT': layer, 'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
     layer = processing.run("native:reprojectlayer", {'INPUT': layer, 'OUTPUT': 'TEMPORARY_OUTPUT',
@@ -241,6 +241,17 @@ def prepare_layer_for_processing(layer):
 
     layer = processing.run("native:removenullgeometries",
                            {'INPUT': layer, 'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+    
+    layer_level_input = processing.run("native:removenullgeometries",
+                           {'INPUT': layer_level_input, 'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+    layer_level_input = processing.run("native:fixgeometries",
+                           {'INPUT': layer_level_input, 'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+    
+    layer = processing.run("native:snapgeometries", {'BEHAVIOR' : 0, 'INPUT' : layer , 
+                                           'OUTPUT' : 'TEMPORARY_OUTPUT', 
+                                           'REFERENCE_LAYER' : layer_level_input,
+                                           'TOLERANCE' : 0.00000007 })['OUTPUT']
+    
     return layer
 
 
@@ -415,9 +426,9 @@ for b in building_dct.keys():
 
 
         # Working with openings:
-        if QgsProject.instance().mapLayersByName(f'{level_name}_openings_single') != []:
-            openings_layer = QgsProject.instance().mapLayersByName(f'{level_name}_openings_single') [0]
-            openings_layer = prepare_layer_for_processing(openings_layer)
+        if QgsProject.instance().mapLayersByName(f'{level_name}_openings') != []:
+            openings_layer = QgsProject.instance().mapLayersByName(f'{level_name}_openings') [0]
+            openings_layer = prepare_layer_for_processing(openings_layer, layer_level_input)
 
             for feature_opening in openings_layer.getFeatures():
                 opening = IMDF.Opening(feature_opening, level)
