@@ -44,9 +44,12 @@ class Venue:
                         "restriction": self.restriction,
                         "name": self.name,
                         "alt_name": None,
-                        "hours": None,
-                        "website": None,
-                        "phone": None,
+                        "phone": "+18004591482",
+                        "website": "http://example.com",
+                        "hours": "Mo-Fr 08:30-20:00",
+                        # "hours": None,
+                        # "website": None,
+                        # "phone": None,
                         "display_point": self.centroid,
                         "address_id": self.address,
 
@@ -141,12 +144,12 @@ class Level:
         self.building_id = building.uid
         self.feature_type = 'level'
 
-        if ordinal is None:
+        if ordinal is not None:
             if self.name.lower() in ['-2', 'b2']:
                 self.ordinal = -2
             if self.name.lower() in ['lg', '-1', 'lower', 'lower_floor', 'lower_level', 'basement', 'b1']:
                 self.ordinal = -1
-            if self.name.lower() in ['gf', '0', 'ground', 'ground_floor', 'ground_level']:
+            if self.name.lower() in ['gf', '0', 'ground', 'ground_floor', 'ground_level', 'GF']:
                 self.ordinal = 0
             if self.name.lower() in ['l1', '1', 'level 1', 'level_1']:
                 self.ordinal = 1
@@ -155,7 +158,7 @@ class Level:
             if self.name.lower() in ['l3', '3', 'level 3', 'level_3']:
                 self.ordinal = 3
         else:
-            print('We need to specify level ')
+            print('We need to specify a level')
         self.address_uid = address.uid
 
     def as_dict(self, verbose):
@@ -182,13 +185,13 @@ class Level:
         return level
 
 class Unit:
-    def __init__(self, feature, level, category):
+    def __init__(self, feature, level: str, category: str):
 
-        self.uid = str(uuid.uuid4())
+        self.uid = feature.attribute('fid_PC')
         self.geometry = eval(feature.geometry().asJson())
         self.centroid = eval(feature.geometry().pointOnSurface().asJson())
         self.category = category
-        self.level = level.uid
+        self.level = level
         self.feature_type = 'unit'
         if str(feature.attribute('name')) == 'NULL':
             self.name = {"en": feature.attribute('typeName')}
@@ -258,10 +261,10 @@ class Address:
             json.dump(self.as_dict(False), outfile, indent=4)
 
 class Anchor:
-    def __init__(self, feature, unit, address):
+    def __init__(self, feature, unit_uid, address):
 
         self.uid = str(uuid.uuid4())
-        self.unit_uid = unit.uid
+        self.unit_uid = unit_uid
         self.centroid = eval(feature.geometry().pointOnSurface().asJson())
         self.address_id = address.uid
         self.feature_type = 'anchor'
@@ -302,9 +305,12 @@ class Occupant:
               "properties": {
                 "category": self.category ,
                 "name": self.name,
-                "phone": None,
-                "website": None,
-                "hours": None,
+                "phone": "+902225551213",
+                "website": "http://example.com",
+                "hours": "Mo-Fr 08:30-20:00",
+                # "phone": None,
+                # "website": None,
+                # "hours": None,
                 "validity" : None,
                 "anchor_id": self.anchor_id,
                 "correlation_id": None
@@ -315,19 +321,27 @@ class Occupant:
         return occupant
 
 class Amenity:
-    def __init__(self, unit, category, address):
+    def __init__(self, unit: Unit, category, address, name=None, centroid=None):
         self.uid = str(uuid.uuid4())
         self.category = category
         self.unit_uid = unit.uid
-        self.centroid = unit.centroid
+
         self.address = address.uid
         self.feature_type = 'amenity'
 
-
-        if str(unit.name).lower() == 'none':
-            self.name = None
+        if not name:
+            if str(unit.name).lower() == 'none':
+                self.name = {"en": None}
+            else:
+                self.name = unit.name
         else:
-            self.name = unit.name
+            self.name = {"en": name}
+
+        if not centroid:
+            self.centroid = unit.centroid
+        else:
+            self.centroid = centroid
+
 
     def as_dict(self, verbose):
         amenity = {
@@ -338,7 +352,7 @@ class Amenity:
                       "properties": {
                         "category": self.category,
                         "accessibility": None,
-                        "name": self.name,
+                        "name":  self.name,
                         "alt_name": None,
                         "phone": None,
                         "website": None,
@@ -358,6 +372,11 @@ class Opening:
         self.geometry = eval(feature.geometry().asJson())
         self.level_id = level.uid
         self.feature_type = 'opening'
+
+        if isinstance(feature.attribute('name'), (QVariant, type(None))):
+            self.name = None
+        else:
+            self.name = {"en": feature.attribute('name')}
 
     def as_dict(self, verbose):
         opening = {
@@ -382,11 +401,28 @@ class Opening:
 
 class Fixture:
     def __init__(self, feature, level, category):
+        self.feature = feature
         self.uid = str(uuid.uuid4())
         self.geometry = eval(feature.geometry().asJson())
         self.level_id = level.uid
         self.category = category
         self.feature_type = 'fixture'
+        self.display_point = None
+        self.name = None
+
+        self.conditionally_update_attributes()
+
+
+    def conditionally_update_attributes(self):
+        if self.category == 'baggagecarousel':
+            self.display_point = eval(self.feature.geometry().pointOnSurface().asJson())
+
+            if isinstance(self.feature.attribute('name'), (QVariant, type(None))):
+                self.name = {"en": self.feature.attribute('typeName')}
+            else:
+                self.name = {"en": self.feature.attribute('name')}
+
+
 
     def as_dict(self, verbose):
         opening = {
@@ -396,10 +432,10 @@ class Fixture:
                   "geometry": self.geometry,
                   "properties": {
                     "category": self.category,
-                    "name": None,
+                    "name": self.name,
                     "alt_name": None,
                     "anchor_id": None,
-                    "display_point": None,
+                    "display_point": self.display_point,
                     "level_id": self.level_id
                   }
                 }
@@ -407,3 +443,69 @@ class Fixture:
             print(json.dumps(opening, sort_keys=False, indent=4))
         return opening
 
+class Kiosk:
+    def __init__(self, feature, level):
+        self.uid = str(uuid.uuid4())
+        self.geometry = eval(feature.geometry().asJson())
+        self.level = level.uid
+        self.feature_type = 'kiosk'
+        self.anchor_id = None
+
+    def set_anchor(self, anchor):
+        self.anchor_id = anchor.uid
+    def as_dict(self, verbose):
+        kiosk = {
+                  "id": self.uid,
+                  "type": "Feature",
+                  "feature_type": self.feature_type,
+                  "geometry": self.geometry,
+                  "properties": {
+
+                    "name": None,
+                    "alt_name": None,
+                    "anchor_id": self.anchor_id,
+                    "display_point": None,
+                    "level_id": self.level
+                  }
+                }
+        if verbose :
+            print(json.dumps(kiosk, sort_keys=False, indent=4))
+        return kiosk
+
+class Section:
+    def __init__(self, feature, level: str):
+        self.feature = feature
+        self.uid = str(uuid.uuid4())
+        self.geometry = eval(feature.geometry().asJson())
+        self.centroid = eval(feature.geometry().pointOnSurface().asJson())
+        self.level = level
+        self.feature_type = 'section'
+        self.category = feature.attribute('section_category')
+
+        if isinstance(self.feature.attribute('name'), (QVariant, type(None))):
+            self.name = {"en": self.feature.attribute('typeName')}
+        else:
+            self.name = {"en": self.feature.attribute('name')}
+
+    def as_dict(self, verbose):
+        section = {
+            "id": self.uid,
+            "type": "Feature",
+            "feature_type": self.feature_type,
+            "geometry": self.geometry,
+            "properties": {
+                "category": self.category,
+                "restriction": None,
+                "accessibility": None,
+                "name": self.name,
+                "alt_name": None,
+                "display_point": self.centroid,
+                "level_id": self.level,
+                "address_id": None,
+                "correlation_id": None,
+                "parents": None
+            }
+        }
+        if verbose :
+            print(json.dumps(section, sort_keys=False, indent=4))
+        return section
